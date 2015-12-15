@@ -30,6 +30,15 @@ init python:
     renpy.image('tile lrd', Image('res/tiles/mine-right-down-left.png', anchor=(0.5, 0.5)))
     renpy.image('tile lud', Image('res/tiles/mine-down-left-up.png', anchor=(0.5, 0.5)))
     renpy.image('tile lurd', Image('res/tiles/mine-all.png', anchor=(0.5, 0.5)))
+# стрелочки
+    renpy.image('arrow_l', Image('res/tiles/arrow-l.png', anchor=(0.0, 0.5)))
+    renpy.image('arrow_l_high', Image('res/tiles/arrow-l-highlight.png', anchor=(0.0, 0.5)))
+    renpy.image('arrow_r', Image('res/tiles/arrow-r.png', anchor=(1.0, 0.5)))
+    renpy.image('arrow_r_high', Image('res/tiles/arrow-r-highlight.png', anchor=(1.0, 0.5)))
+    renpy.image('arrow_u', Image('res/tiles/arrow-u.png', anchor=(0.5, 0.0)))
+    renpy.image('arrow_u_high', Image('res/tiles/arrow-u-highlight.png', anchor=(0.5, 0.0)))
+    renpy.image('arrow_d', Image('res/tiles/arrow-d.png', anchor=(0.5, 1.0)))
+    renpy.image('arrow_d_high', Image('res/tiles/arrow-d-highlight.png', anchor=(0.5, 1.0)))
 # персонажи
     renpy.image('sl_px', Image('res/tiles/sl.png', anchor=(0.5, 1.0)))
     renpy.image('pi_px', Image('res/tiles/pi.png', anchor=(0.5, 1.0)))
@@ -48,9 +57,9 @@ init python:
         # добавляем выход. dir = 'u'p,'d'own,'l'eft,'r'ight. exit = Exit или Tile, куда выходим
         def add_exit(self, dir, exit):
             if isinstance(exit, Exit):
-                self.dict[dir] = exit
+                self.exits[dir] = exit
             elif isinstance(exit, Tile):
-                self.dict[dir] = Exit(self, exit)
+                self.exits[dir] = Exit(self, exit)
             else:    
                 raise TypeError, exit
         # проверяем, существует ли выход в данном направлении
@@ -59,10 +68,10 @@ init python:
             
     # переход между квадратами - в одну сторону. Для двустороннего перехода надо заводить два перехода - оттуда сюда и отсюда туда
     class Exit:
-        def __init__(self, tilefrom, tileto, func = None):
+        def __init__(self, tilefrom, tileto, label = None):
             self.tilefrom = tilefrom # откуда переход
             self.tileto = tileto     # куда переход
-            self.func = func         # специальная функция для перехода - проверка ключа, выставление дополнительных атрибутов на персонажа, etc
+            self.label = label       # label куда надо прыгнуть
         # пройти через проход
         def pass_through(self):
             return True
@@ -124,7 +133,7 @@ init python:
             self.ch = ch # Кто говорит
             self.inventory = list() # вещи в кармане
             self.image = img # фигурка персонажа
-            self.party_pos = party_pos
+            self.party_pos = party_pos # где стоит в группе
             # параметры персонажа:
             self.Wet = False
             self.Scared = False
@@ -132,8 +141,11 @@ init python:
         
      # собственно, игра
     class DungeonGame(renpy.Displayable):
+        Visible = False # Глобальный флаг видимости
         # инициализация карты и параметров
-        def __init__(self):
+        def __init__(self, **kwargs):
+            super(DungeonGame, self).__init__(**kwargs)
+        
             self.Dungeon = Map(10, 10)
             # 9 . . . . . . . . . . 
             #                   E
@@ -194,14 +206,11 @@ init python:
             
             # ломаем стены, делаем проходы, выставляем дополнительные условия и события на переходы
             self.Dungeon.set_pass((2,1), (2,2))
-            # self.Dungeon.get_tile(2,1).get_exit('u').func = self.Dungeon_MakeWet # функция, чтоб промочить всех.
-            # self.Dungeon.get_tile(2,2).get_exit('d').func = self.Dungeon_MakeWet # и при обратном проходе тоже мокнем
             self.Dungeon.set_pass((6,1), (6,2))
-            # self.Dungeon.get_tile(7,1).add_exit('l',self.Dungeon.get_tile(6,1))# one-way, из 7,1 в 6,1
+            self.Dungeon.get_tile(7,1).add_exit('l',self.Dungeon.get_tile(6,1))# one-way, из 7,1 в 6,1
             self.Dungeon.set_pass((7,1), (7,2))
             self.Dungeon.set_pass((7,1), (8,1))
-            # tile = self.Dungeon.get_tile(8,1)
-            # tile.add_exit('r', Exit(tile, None, self.Dungeon_ExitOldCamp) # функция выхода из подземелья через старый лагерь, заодно проверяем наличие веревки
+            self.Dungeon.get_tile(8,1).add_exit('r', Exit(self.Dungeon.get_tile(8,1), None)) # выход из подземелья через старый лагерь
             
             self.Dungeon.set_pass((2,2), (2,3))
             self.Dungeon.set_pass((5,2), (5,3))
@@ -232,29 +241,33 @@ init python:
             
             self.Dungeon.set_pass((2,7), (2,8))    
             self.Dungeon.set_pass((2,7), (3,7))    
-            # tile = self.Dungeon.get_tile(3,7)
-            # tile.add_exit('r', Exit(tile, self.Dungeon.get_tile(4,7), self.Dungeon_LongFall)) # one-way с 3,7 в 4,7. затяжное падение одностороннее
-            # tile = self.Dungeon.get_tile(4,7)
-            # tile.add_exit('l', Exit(tile, None, self.Dungeon_NoWayUp_Wet)) # попытаться влево, мокнет
+            self.Dungeon.get_tile(3,7).add_exit('r', self.Dungeon.get_tile(4,7)) # one-way с 3,7 в 4,7. затяжное падение одностороннее
+            self.Dungeon.get_tile(4,7).add_exit('l', self.Dungeon.get_tile(4,7)) # попытаться влево, не получается
             self.Dungeon.set_pass((4,7), (4,8))
             self.Dungeon.set_pass((4,7), (5,7))
             self.Dungeon.set_pass((5,7), (5,8))
             self.Dungeon.set_pass((5,7), (6,7))
             self.Dungeon.set_pass((6,7), (7,7))
-            self.Dungeon.set_pass((7,7), (8,7)) # добавить функцию, в которой открываем дверь
+            self.Dungeon.set_pass((7,7), (8,7)) # дверь в котельную
             self.Dungeon.set_pass((8,7), (8,8))
             
-            self.Dungeon.set_pass((2,8), (3,8))
-            # self.Dungeon.get_tile(2,8).get_exit('l').func = self.Dungeon_MeetAI # переход 8,3 в 8,2. дикий ИИ Шурика, если мокрый, долбанёт током, если напуган, нападёт (бегство)
+            self.Dungeon.set_pass((2,8), (3,8))# переход 8,3 в 8,2. дикий ИИ Шурика, если мокрый, долбанёт током, если напуган, нападёт (бегство)
             self.Dungeon.set_pass((2,8), (3,8))
             self.Dungeon.set_pass((3,8), (4,8))
             self.Dungeon.set_pass((4,8), (5,8))
-            # tile = self.Dungeon.get_tile(8,8)
-            # tile.add_exit('u', Exit(tile, None, self.Dungeon_ExitGenda)) # выход наружу под Гендой
+            self.Dungeon.get_tile(8,8).add_exit('u', Exit(self.Dungeon.get_tile(8,8), None) # выход наружу под Гендой
             
             self.current_pos = None # текущее расположение партии на карте
+            self.current_exit = None # текущий выход - заполняется только во время срабатывания события на переход
             self.party = list() # кто идет с нами
-            
+        
+        # Рисуем карту и все происходящее на экране
+        def render(self, width, height, st, at):
+            return renpy.render(1,1)
+        # Взаимодействия
+        def event(self, ev, x, y, st):
+            return
+        
             # переходы
         def action_MoveUp:
             return
@@ -270,13 +283,7 @@ init python:
             self.current_pos = start_pos
             self.party = party()
         
-        # Функция одного тика в игре - рисуем текущее расположение всего, ожидаем реакции игрока, 
-        def GameTurm(self):
-            # рисуем расположение всего
-            self.DrawState()
-            # ожидаем действия игрока
-            return
-        
+       
         def DrawState(self):
             renpy.scene()
             # Draw tile
@@ -292,7 +299,40 @@ init python:
             # Draw fog-of-war
             
             # Draw explored map
-        
+    
+    # Объект-карта. Все как в alt_map
+    renpy.store.alt_DungeonGame = DungeonGame()
+    
+    # функции для показа и взаимодействия с игрой из сценария
+    # инициализация - стартовая позиция, набор участников
+    def alt_dungeongame_setstart(pos):
+        renpy.store.alt_DungeonGame.current_pos = pos
+    # добавляем человека в партию
+    def alt_dungeongame_addchar(ch, img, party_pos)
+        renpy.store.alt_DungeonGame.party.append(GameCharacter(ch, img, party_pos))
+    # убираем человека из партии
+    def alt_dungeongame_removechar(ch)
+        for p in renpy.store.alt_DungeonGame.party:
+            if p.ch == ch:
+                renpy.store.alt_DungeonGame.party.remove(p)
+                return p
+    # задаем событие на переход
+    def alt_dungeongame_setevent(x, y, exit, label)
+        renpy.store.alt_DungeonGame.Dungeon.get_tile(x, y).get_exit(exit).label = label
+    # убираем все события с переходов
+    def alt_dungeongame_resetevents()
+        for t in renpy.store.alt_DungeonGame.Dungeon.tiles:
+            if t != None:
+                for e in t.exits.Values: e.label = None
+    # показать карту
+    def alt_dungeongame_show():
+        renpy.store.alt_DungeonGame.Visible = True
+    # спрятать карту
+    def alt_dungeongame_hide():
+        renpy.store.alt_DungeonGame.Visible = False
+    # пройти или не пройти в проход. Должно вызваться при срабатывании события на переходе. если go = True - проходим через выход, если False - то остаемся на месте.
+    def alt_dungeongame_travel(go)
+    
 label alt_cotocombs:
     menu:
         "Открыть карту?":
@@ -301,6 +341,16 @@ label alt_cotocombs:
             "Я решил прислушаться к интуиции и, прикинув направление, зашагал в нужную сторону."
             return 
 label alt_cotocombs_map:
+    # Инициализация 
+    $ dungeongame_init
+    # Определяем состав партии
+    $ dungeongame_add_char(me, 'pi_px', 'party_pos_center')
+    $ dungeongame_add_char(me, 'sl_px', 'party_pos_party_pos_leftup')
+    # Определяем стартовую точку
+    $ dungeongame_start(8,1)
+    # Запуск!
+    $ dungeongame_show
+
     #Пилим DND-карту
     #Активный тайл-сет: 8х8, номерация тайлов с левого нижнего угла, старт с тайла 8, если идём со стороны старого лагеря, либо с тайла 64, если идём от Генды.
     #Ключи участия: alt_catac_wet(попал в воду), alt_ow_77 (односторонний спуск, закрывающий выход), alt_ow_73(односторонний проход через воду(засыпает породой))
