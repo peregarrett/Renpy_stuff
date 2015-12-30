@@ -278,6 +278,8 @@ init python:
         def action_MoveRight:
             return
         
+        def Go():
+            self.current_pos = self.current_exit.tile_to
         
         def Start(self, start_pos, party):
             self.current_pos = start_pos
@@ -331,7 +333,8 @@ init python:
     def alt_dungeongame_hide():
         renpy.store.alt_DungeonGame.Visible = False
     # пройти или не пройти в проход. Должно вызваться при срабатывании события на переходе. если go = True - проходим через выход, если False - то остаемся на месте.
-    def alt_dungeongame_travel(go)
+    def alt_dungeongame_travel(go):
+        
     
 label alt_cotocombs:
     menu:
